@@ -4,13 +4,13 @@
 function patch_color(pf)
     # quick work around for a scale based on probability of catching fire...
     # I wish I could figure out how to scale this better
-    colors = ("#007500", "#00A300", "#00D100","#00FF00")
+    colors = ("#0A7F00", "#0C9300", "#0EAF00","#10C900")
     pr = [0, 0.0075, 0.01, 0.0125]
-    
+
     if pr[1] < pf <= pr[2]
         color = colors[1]
 
-    elseif pr[2] < pf pr[3]
+    elseif pr[2] < pf <= pr[3]
         color = colors[2]
 
     elseif pr[3]< pf <= pr[4]
@@ -27,9 +27,9 @@ end
 function agent_color(a)
     if a isa Patch
         if a.status == :burning
-            color = :red
+            color = :crimson
         elseif a.status == :burnt
-            color = :gray55
+            color = :gray75
         else
             color = patch_color(a.prob_burn)            
         end
@@ -39,6 +39,23 @@ function agent_color(a)
         color = :purple
     end
     color
+end
+
+function agent_size(a)
+    if a isa Patch
+        if a.status == :burning
+            sz = 16
+        elseif a.status == :green
+            sz = 20
+        else
+            sz = 14
+        end
+        
+    else
+        sz = 20
+
+    end
+
 end
 
 const uav_polygon = Makie.Polygon(Point2f[(-.5,-.5), (1,0), (-.5,.5)])
@@ -71,7 +88,7 @@ end
 
 
 function call_fig(model)
-    figure, _ = Agents.abmplot(model; ac = agent_color,as = 12, am = agent_shape, scatterkwargs = (strokewidth = 0.1,), figure = (;resolution = (500,500)))
+    figure, _ = Agents.abmplot(model; ac = agent_color,as = agent_size, am = agent_shape, scatterkwargs = (strokewidth = 0.,), figure = (;resolution = (750,750)))
     return figure
 
 end

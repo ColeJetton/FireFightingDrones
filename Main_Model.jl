@@ -8,15 +8,19 @@ include("Model_Agents.jl")
 
 
 function forest_fire(; 
-    n_uav = 25,        
+    n_uav = 25,
+    uav_speed = 10, # m/min (m/step)       
     n_x_cells = 50,
-    radius_burn = 10.0,
-    burn_time = 1, 
-    prob_burn = 1.0, 
+    radius_burn = 10.0, # m
+    burn_time = 100, # min (steps)
+    prob_burn = 0.01, 
     first_burn = :center,
-    tree_UQ = (0,0), #(20, 0.005),
+    tree_UQ = (20, 0.005),
     seed = 2,
-    tune_model = false 
+    tune_model = false, 
+    battery_max = 200,
+    battery_recharge = 20,
+    suppressant_max = 5,
     )
 
     #initialize based on dimensions and
@@ -26,16 +30,16 @@ function forest_fire(;
 
     #note: status method for scheduling is needed 
     order = Dict("green" => 1, "burning" => 2, "burnt" => 3, "coord" => 4, "uav" => 5)
-
+    model_params = Dict(:battery_max => battery_max, :battery_recharge => battery_recharge, :n_uav => n_uav, :suppressant_max => suppressant_max)
     if tune_model
         forest = ABM(Patch, space; rng, scheduler = Schedulers.ByProperty(:sched), container = Vector)
     else
-        forest = ABM(Union{Patch,UAV,Coord}, space; rng, scheduler = Schedulers.ByProperty(:sched), container = Vector)
+        forest = ABM(Union{Patch,UAV,Coord}, space; rng, properties = model_params, scheduler = Schedulers.ByProperty(:sched), container = Vector)
     end
     
 
 
-    # Establish  scenarios, need to change this and add more.
+    # Establish  scenarios, need to change this and add more. Could be a good idea to create other functions outside of this
     if first_burn == :center
         x_min = dims[1]*0.49
         x_max = dims[1]*0.50
@@ -48,6 +52,13 @@ function forest_fire(;
         y_min = 0
         y_max = dims[2]
         
+    elseif first_burn == :lowerleft
+        x_min = dims[1]*0.24
+        x_max = dims[1]*0.26
+        y_min = x_min
+        y_max = x_max
+
+    
     else
         error("Invalid Scenario, :center or :left only at this moment")
     end
@@ -74,23 +85,20 @@ function forest_fire(;
 
     #if the goal isn't to tune the model, then make room for home base and add in other agents
     if !tune_model
-        in_r = []
+        in_rmv = []
         
         for ind in 1:length(x_p)
             if x_p[ind] > dims[1]*0.8 && y_p[ind] > dims[2]*0.8
-                push!(in_r,ind)
+                push!(in_rmv,ind)
             end
         end
 
-        deleteat!(x_p, in_r)
-        deleteat!(y_p, in_r)
+        deleteat!(x_p, in_rmv)
+        deleteat!(y_p, in_rmv)
 
-    
-    
     end
 
     #add in the forest patches
-    #note that for mixed agent models, position has to be given first for some reason...
     for ind in 1:size(x_p)[1]
         pos = (x_p[ind], y_p[ind]) 
 
@@ -104,17 +112,17 @@ function forest_fire(;
         end
     end
     
+    # Add in coordinator and UAV agents. Needs to be done at the end for plotting purposes
     if !tune_model
-
 
         test_velo = (1,1)
         test_targ = (50,50)
-
+        base_location = (dims[1]*0.9, dims[2]*0.9)
         for _ in 1:n_uav
-            add_agent!(UAV, forest, test_velo, order["uav"], 100, 100,100,:busy, test_targ)
+            add_agent!(UAV, forest, test_velo, order["uav"], battery_max, suppressant_max,uav_speed,:idle, test_targ)
         end
 
-        add_agent!((dims[1]*0.9, dims[2]*0.9), Coord, forest, (0,0), order["coord"]) 
+        add_agent!(base_location, Coord, forest, (0,0), order["coord"],0) 
        
     end
 

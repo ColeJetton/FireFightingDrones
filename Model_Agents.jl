@@ -16,10 +16,10 @@ end
 
 
 @agent UAV ContinuousAgent{2} begin
-    #= UAV agent to receive signals (plan::) to follow orders from the Coord. 
+    #= UAV agent to receive signals to follow orders from the Coord. 
     It includes parts for agent order calling and design parameters=#
     sched::Int
-    battery::Float64 
+    battery::Int 
     suppressant::Int
     speed::Float64 
     status::Symbol
@@ -28,9 +28,10 @@ end
 
 
 @agent Coord ContinuousAgent{2} begin
-    #=
+    #= Coordinator Agent that has a global view of the simulation. 
     =#
-   sched::Int #work around for scheduling the agents  
+    sched::Int
+    internal_step_counter::Int
 end
 
 
@@ -61,9 +62,30 @@ function agent_step!(patch::Patch, model)
 #placeholder agent steps for testing, will add in more later
 
 function agent_step!(uav::UAV, model)
-    move_agent!(uav, model, 10)
+    #
+    #move_agent!(uav, model, 10)
 end
 
 function agent_step!(coord::Coord, model)
+    #= Coordinates the agents. Unsure how yet
+    Get the positions and statuses of the patches and the uavs
+    Use positions of burning patches to determine the targets (may be more or less than n_uav)
+    Assign targets to drones
 
+    Need to figure out how to delay telling the coornator to do anything at first. Or just start with a bigger flame
+    =#
+
+    coord.internal_step_counter += 1
+    #don't send out new plans all the time. slows things down
+    #note. probably a good idea to add this to the synthetic example
+    if rem(coord.internal_step_counter, 10) == 0
+        patches = [p for p in allagents(model) if p isa Patch ]
+        patches_burning = [p for p in patches if p.status == :burning]
+        #for p in patches_burning
+        #    print(p.pos,"\n")
+        #end
+
+    end
 end
+
+# Support functions for the agent steps
