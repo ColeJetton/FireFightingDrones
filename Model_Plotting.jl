@@ -51,22 +51,18 @@ function agent_size(a)
             sz = 14
         end
         
-    else
-        sz = 20
+    elseif a isa UAV
+        sz = 30
 
+    else 
+        sz = 20
     end
 
 end
 
-const uav_polygon = Makie.Polygon(Point2f[(-.5,-.5), (1,0), (-.5,.5)])
 
 const coord_polygon = Makie.Polygon(Point2f[(-.75,-1), (-.75,0), (-1,0), (0,1), (1, 0), (0.75, 0), (0.75, -1)])
 
-function uav_marker(u::UAV)
-    t = atan(u.vel[2], u.vel[1])
-    shape = rotate_polygon(uav_polygon, t)
-    return shape
-end
 
 function agent_shape(a)
     if a isa Patch
@@ -78,7 +74,7 @@ function agent_shape(a)
         end
         
     elseif a isa UAV
-        shape = uav_marker(a)
+        shape = :xcross #rotate_polygon(:star4, pi/4)#uav_marker(a)
 
     else
         shape = coord_polygon

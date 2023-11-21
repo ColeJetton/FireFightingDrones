@@ -1,4 +1,4 @@
-using Agents, Random
+using Agents, Random, Clustering
 
 #Create the agents, all of which are continuous in the simulation
 #note that '@agent macro for ContinuousAgent gives position and velocity parameters automatically
@@ -76,16 +76,31 @@ function agent_step!(coord::Coord, model)
     =#
 
     coord.internal_step_counter += 1
+    #=
     #don't send out new plans all the time. slows things down
     #note. probably a good idea to add this to the synthetic example
-    if rem(coord.internal_step_counter, 10) == 0
+    if rem(coord.internal_step_counter, 10) == 0 #and free drones?
         patches = [p for p in allagents(model) if p isa Patch ]
         patches_burning = [p for p in patches if p.status == :burning]
-        #for p in patches_burning
-        #    print(p.pos,"\n")
-        #end
+        #print(size(patches_burning)[1])
+       
+        cluster = zeros((2,size(patches_burning)[1]))
+        
+        for i in 1:size(patches_burning)[1]
+            #print(typeof(p.pos),"\n")
+            cluster[:,i] = [patches_burning[i].pos[1];patches_burning[i].pos[2]]
+        end
+        #choose number of clusters based on dividing number of patches. 
+        #that way you can "assume" the clusters are of a certain size
+        # and you can still prioritize areas
+        #and not over allocate drones? idk
+        R = kmeans(cluster,2) 
+        #print(R.centers, assignments(R), counts(R),"\n")
+       print(cluster[assignments])
+
 
     end
+    =#
 end
 
 # Support functions for the agent steps
