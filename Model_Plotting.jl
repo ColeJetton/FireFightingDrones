@@ -34,9 +34,9 @@ function agent_color(a)
             color = patch_color(a.prob_burn)            
         end
     elseif a isa UAV
-        color = :blue
+        color = :purple4
     else
-        color = :purple
+        color = :blue
     end
     color
 end
@@ -44,18 +44,18 @@ end
 function agent_size(a)
     if a isa Patch
         if a.status == :burning
-            sz = 16
+            sz = 18
         elseif a.status == :green
-            sz = 20
+            sz = 20.5
         else
             sz = 14
         end
         
     elseif a isa UAV
-        sz = 30
+        sz = 32
 
     else 
-        sz = 20
+        sz = 25
     end
 
 end
@@ -63,18 +63,19 @@ end
 
 const coord_polygon = Makie.Polygon(Point2f[(-.75,-1), (-.75,0), (-1,0), (0,1), (1, 0), (0.75, 0), (0.75, -1)])
 
+const uav_polygon = Makie.Polygon(Point2f[(-1,0), (0,1), (1, 0), (0, -1)])
 
 function agent_shape(a)
     if a isa Patch
         shape = :hexagon
         if a.status == :burning
-            shape = :circle
+            shape = :star8
         elseif a.status == :burnt
             shape = :rect
         end
         
     elseif a isa UAV
-        shape = :xcross #rotate_polygon(:star4, pi/4)#uav_marker(a)
+        shape = :xcross 
 
     else
         shape = coord_polygon
