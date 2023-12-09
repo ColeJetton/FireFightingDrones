@@ -1,4 +1,4 @@
-using Agents, Random, Clustering
+using Agents, Random
 
 #Create the agents, all of which are continuous in the simulation
 #note that '@agent macro for ContinuousAgent gives position and velocity parameters automatically
@@ -58,6 +58,7 @@ function agent_step!(patch::Patch, model)
         end
 
     end
+    
 
 end
 
@@ -73,21 +74,21 @@ function agent_step!(uav::UAV, model)
         #if not at target, move towards target
 
         if uav.pos == uav.target_pos
-            #find patch with that id
-            patch = model.agents[uav.target_id] #this may not work
+            #find patch with that id and decrease it's burn time, assuming it can't go below 0
+            patch = model.agents[uav.target_id] 
             patch.burn_time = max(0, patch.burn_time - model.suppressant_rate)
-
-            #reduce suppressant
+           
+            #reduce intenral suppressant
             uav.suppressant = max(0, uav.suppressant - model.suppressant_rate)
 
-            #if the patch is out, change status to idle
+            #if the patch is out, change status to idle and patch status to burnt
             if patch.burn_time == 0
-                print(uav, "??? \n")
+                uav.vel = (0, 0)
                 uav.status = :idle
                 patch.status = :burnt
             end
 
-            #if out of suppressant, change status to returning
+            #if out of suppressant (regardless of state), change status to returning
             if uav.suppressant == 0
                 uav.status = :returning
                 uav.target_pos = model.base_location
@@ -95,25 +96,37 @@ function agent_step!(uav::UAV, model)
             #print("sup", uav.suppressant,"\n")
 
         else
-            #move towards target, but check if it overshot
-            d_i = euclidean_distance(uav, model.agents[uav.target_id], model)
-            print(uav,"\n")
-            move_agent!(uav, model, 1)
-            print(uav,"\n\n")
-            if d_i > euclidean_distance(uav, model.agents[uav.target_id], model)
+            #move towards target, but check if it overshot and reassign based on it being "close enough")
+            if euclidean_distance(uav, model.agents[uav.target_id], model) <= sqrt(uav.vel[1]^2 + uav.vel[2]^2)
                 uav.pos = uav.target_pos
+                uav.vel = (0,0)
+            else
+                #move_agent!(uav, model, 1) #THIS SHOULD WORK
+                #I have no clue what is going on here, but I built an exception to get it to work
+                #In the mean time, this is a dumb work around that seems to be fine
+
+                try
+                    move_agent!(uav, model, 1)
+                catch MethodError
+                    #uav.pos = uav.target_pos
+                    #uav.vel = (0,0)
+                    uav.pos = (uav.pos[1] + uav.vel[1], uav.pos[2] + uav.vel[2])
+                end
+
             end
+
 
         end
 
 
         #reduce it's battery, check to see if it needs to return and refill
         uav.battery -= 1
-
-        if euclidean_distance(uav, model.agents[1], model) > uav.speed*uav.battery #if it can't make it back            
+        
+        if (euclidean_distance(uav,  model.agents[end], model) > uav.speed*uav.battery) || uav.suppressant == 0 #if it can't make it back            
+            uav.battery = 0 #set battery to 0, even though that's not what happens (for simplicity)
             uav.status = :returning
             uav.target_pos = model.base_location
-            ratio = uav.speed/euclidean_distance(assign_drone, model.agents[1], model)
+            ratio = uav.speed/euclidean_distance(uav, model.agents[1], model)
             uav.vel = ((model.base_location[1] - uav.pos[1])*ratio, (model.base_location[2] - uav.pos[2])*ratio)
         end
 
@@ -122,16 +135,20 @@ function agent_step!(uav::UAV, model)
         #if at the home, change the status to refilling
 
         if uav.pos == model.base_location
+            uav.vel = (0,0)
             uav.status = :refilling
         else
             #move towards base, but check if it overshot
-            d_i = euclidean_distance(uav, model.agents[1], model)
-            
-            print("moving back",uav,"\n")
-            move_agent!(uav, model, 1)
-
-            if d_i > euclidean_distance(uav, model.agents[1], model)
+            if euclidean_distance(uav, model.agents[end], model) <= sqrt(uav.vel[1]^2 + uav.vel[2]^2)
                 uav.pos = model.base_location
+                uav.vel = (0,0)
+            else
+                #see above about weird issue with move_agent!
+                try
+                    move_agent!(uav, model, 1)
+                catch MethodError
+                    uav.pos = (uav.pos[1] + uav.vel[1], uav.pos[2] + uav.vel[2])
+                end
             end
         end
 
@@ -144,7 +161,6 @@ function agent_step!(uav::UAV, model)
 
         if uav.battery == model.battery_max && uav.suppressant == model.suppressant_max
             uav.status = :idle
-            uav.vel = (0,0)
         end
 
     else
@@ -167,11 +183,19 @@ function agent_step!(coord::Coord, model)
     #don't send out new plans all the time. slows things down
 
     if rem(coord.internal_step_counter, 10) == 0 && coord.internal_step_counter >= coord.fire_delay
+        #=
         patches = [p for p in allagents(model) if p isa Patch]
         patches_burning = [p for p in patches if p.status == :burning]
         patches_burning = sort(patches_burning, by=p -> p.dist)
+        patches_burnt = [p for p in patches if p.status == :burnt] 
+        patches = [patches_burning; patches_burnt]
+        centroid = (mean([p.pos[1] for p in patches]), mean([p.pos[2] for p in patches]))
+        =#
 
-        if length(patches_burning) == 0
+        prioritized_patches = patch_prioritization(model)
+
+
+        if length(prioritized_patches) == 0
             #fires are put out! simulation can end
             #note that I can't figure out how to get the simulation to end on its own
             print("Fires are out! Done in ", coord.internal_step_counter - 1, " steps. \n")
@@ -185,23 +209,21 @@ function agent_step!(coord::Coord, model)
         if length(free_uavs) > 0
             #find distance between uav and each patch based on the priority of the patch
             #note that this a bit of a hack since a priority queue would be better           
-            for i in 1:length(patches_burning)
+            for i in 1:length(prioritized_patches)
 
                 if length(free_uavs) == 0
                     break
                 end
 
-                free_uavs = sort(free_uavs, by=u -> euclidean_distance(u, patches_burning[i], model))
+                free_uavs = sort(free_uavs, by=u -> euclidean_distance(u, prioritized_patches[i], model))
 
                 assign_drone = popfirst!(free_uavs)
-                assign_drone.target_pos = patches_burning[i].pos
-                assign_drone.target_id = patches_burning[i].id
+                assign_drone.target_pos = prioritized_patches[i].pos
+                assign_drone.target_id = prioritized_patches[i].id
                 
-                ratio =assign_drone.speed/euclidean_distance(assign_drone, patches_burning[i], model)
-                print(euclidean_distance(assign_drone, patches_burning[i], model),"\n")
-                new_vel = ((patches_burning[i].pos[1] - assign_drone.pos[1])*ratio, (patches_burning[i].pos[2] - assign_drone.pos[2])*ratio)
+                ratio =assign_drone.speed/euclidean_distance(assign_drone, prioritized_patches[i], model)
+                new_vel = ((prioritized_patches[i].pos[1] - assign_drone.pos[1])*ratio, (prioritized_patches[i].pos[2] - assign_drone.pos[2])*ratio)
                 assign_drone.vel = new_vel
-                print(assign_drone,"\n")
                 assign_drone.status = :assigned
 
             end
@@ -210,3 +232,18 @@ function agent_step!(coord::Coord, model)
 end
 
 # Support functions for the agent steps
+
+function patch_prioritization(model)
+
+
+        patches = [p for p in allagents(model) if p isa Patch]
+        patches_burning = [p for p in patches if p.status == :burning]
+        patches_burnt = [p for p in patches if p.status == :burnt]
+        centroid = (mean([p.pos[1] for p in patches]), mean([p.pos[2] for p in patches]))
+
+        weights = [1, 1.5]
+
+        prioritized_patches = sort(patches_burning, by=p -> weights[1] * p.dist + weights[2] * sqrt( (p.pos[1] - centroid[1])^2 + (p.pos[2] - centroid[2])^2))
+
+    return prioritized_patches
+end

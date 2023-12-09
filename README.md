@@ -4,9 +4,14 @@ This Agent Based Model (ABM) of a homogeneous fleet of Fire Fighting Drones. The
 
 
 There are three main agents: 
-1. Patches: These agents represent the forest. Ideally it will be rebuilt later with the patches being built into the environment (to increase the speed) however the use of continuous space requires them to be agents at this time.
-2. UAVs: These are the fire fighting drones. They receive commands from the coordinator agent,
-3. Coordinator: This takes in a global view of the system to assign UAV to specific tasks/locations.
+1. Patches: These agents represent the forest. The current setup works with a probabilistic fire propagation model.
+    
+    * Ideally it will be rebuilt later with the patches being built into the environment (to increase the speed) however the use of continuous space requires them to be agents at this time. The other option is to give agent the id of its neighbors.
+
+2. UAVs: These are the fire fighting drones. They get assigned a patch from the coordinator agent but act autonomously to travel to the patch, put out the fire, and head back to the base when need.
+
+
+3. Coordinator: This takes in a global view of the system to assign UAV to specific tasks/locations. Current setup weighs the importance of certain patches and "auctions" them o
 
 
 This is a work in progress. Model tuning is still in progress and the initial model is designed to be an approximation of fire spreading based on growth rates. Future versions will be more realistic and incorporate actual forest fire modeling methods, such as ABwise.

@@ -21,7 +21,7 @@ function forest_fire(;
     tune_model = false, #keyword to just look at model for tuning purposes
     battery_max = 200, #des
     battery_recharge = 20,
-    suppressant_max = 200, 
+    suppressant_max = 300, 
     suppressant_rate = 10,
     suppressant_recharge = 20,
     )
@@ -121,8 +121,9 @@ function forest_fire(;
     # Add in coordinator and UAV agents. Needs to be done at the end for plotting purposes
     if !tune_model
 
-        for _ in 1:n_uav
-            add_agent!(UAV, forest, (0,0), order["uav"], battery_max, suppressant_max,uav_speed,:idle, (0,0), 0)
+        for _ in 1:n_uav #note, change initial position to be better distributed with the base_location
+            add_agent!(base_location,
+             UAV, forest, (0,0), order["uav"], battery_max, suppressant_max,uav_speed,:idle, (0,0), 0)
         end
 
         add_agent!(base_location, Coord, forest, (0,0), order["coord"],fire_delay,0) 

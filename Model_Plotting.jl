@@ -44,11 +44,14 @@ end
 function agent_size(a)
     if a isa Patch
         if a.status == :burning
-            sz = 18
+            sz = 16
+            #sz = 14
         elseif a.status == :green
-            sz = 20.5
+            sz = 18
+            #sz = 10
         else
             sz = 14
+            #sz = 10
         end
         
     elseif a isa UAV
@@ -87,5 +90,12 @@ end
 function call_fig(model)
     figure, _ = Agents.abmplot(model; ac = agent_color,as = agent_size, am = agent_shape, scatterkwargs = (strokewidth = 0.,), figure = (;resolution = (750,750)))
     return figure
+
+end
+
+function call_video(model, filename,  framerate, frames, spf)
+    Agents.abmvideo(filename, model, agent_step!;
+     ac = agent_color,as = agent_size, am = agent_shape, scatterkwargs = (strokewidth = 0.,), 
+     spf = spf, framerate = framerate, frames = frames)
 
 end
