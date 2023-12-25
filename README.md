@@ -15,3 +15,14 @@ There are three main agents:
 
 
 This is a work in progress. Model tuning is still in progress and the initial model is designed to be an approximation of fire spreading based on growth rates. Future versions will be more realistic and incorporate actual forest fire modeling methods, such as ABwise.
+
+Packages Required to Run:
+```
+Agents.jl 
+Random.jl
+InteractiveDynamics.jl
+CairoMakie.jl
+LazySets.jl
+Statistics.jl
+CurveFit.jl
+```

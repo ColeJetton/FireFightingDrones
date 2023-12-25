@@ -5,7 +5,7 @@ function patch_color(pf)
     # quick work around for a scale based on probability of catching fire...
     # I wish I could figure out how to scale this better
     colors = ("#0A7F00", "#0C9300", "#0EAF00","#10C900")
-    pr = [0, 0.0075, 0.01, 0.0125]
+    pr = [0, 0.025, 0.03, 0.035]
 
     if pr[1] < pf <= pr[2]
         color = colors[1]
@@ -44,13 +44,13 @@ end
 function agent_size(a)
     if a isa Patch
         if a.status == :burning
-            sz = 16
+            sz = 20
             #sz = 14
         elseif a.status == :green
-            sz = 18
+            sz = 20
             #sz = 10
         else
-            sz = 14
+            sz = 16
             #sz = 10
         end
         

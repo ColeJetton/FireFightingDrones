@@ -13,6 +13,7 @@ using Agents, Random
     radius_burn::Float64
     status::Symbol
     dist::Float64 #distance from home, for prioritization in sorting
+    edge::Bool #if it's on the edge of the forest
 end
 
 
@@ -35,6 +36,8 @@ end
     sched::Int
     fire_delay::Int #built in delay for corrinator to notice the file
     internal_step_counter::Int #ensures it's not constantly reassigning things
+    fire_out::Bool
+    steps_out::Int
 end
 
 
@@ -42,12 +45,21 @@ end
 
 function agent_step!(patch::Patch, model)
     #if current tree is burning, possibly light others on fire
-    if patch.status == :burning
+    if patch.status == :burning 
+        check_edge = 0 #count number of neighbors that are burnt, if it's 6, then it's on the edge
         for neighbor in nearby_agents(patch, model, patch.radius_burn)
             #not sure why I need to do a euclidean distance check, but this is the only way I could get it work!
-            if neighbor.status == :green && euclidean_distance(patch, neighbor, model) < patch.radius_burn * 1.05 && rand(model.rng) < neighbor.prob_burn
-                neighbor.status = :burning
-                neighbor.sched = 2
+            #future versions will add in neighbor IDs to make this faster
+            if euclidean_distance(patch, neighbor, model) < patch.radius_burn * 1.05
+                if neighbor.status == :green  && rand(model.rng) < neighbor.prob_burn
+                    neighbor.status = :burning
+                    neighbor.sched = 2
+                end
+
+                if neighbor.status == :burning || neighbor.status == :burnt
+                    check_edge += 1
+                end
+
             end
         end
 
@@ -55,11 +67,19 @@ function agent_step!(patch::Patch, model)
         patch.burn_time -= 1
         if patch.burn_time == 0
             patch.status = :burnt
+            patch.edge = false
         end
+
+        #update edge status if needed
+        if patch.status == :burning && check_edge != 6
+            patch.edge = true
+        else 
+            patch.edge = false
+        end
+
 
     end
     
-
 end
 
 
@@ -76,16 +96,17 @@ function agent_step!(uav::UAV, model)
         if uav.pos == uav.target_pos
             #find patch with that id and decrease it's burn time, assuming it can't go below 0
             patch = model.agents[uav.target_id] 
-            patch.burn_time = max(0, patch.burn_time - model.suppressant_rate)
+            patch.burn_time = max(0, patch.burn_time - model.suppressant_rate) 
            
             #reduce intenral suppressant
             uav.suppressant = max(0, uav.suppressant - model.suppressant_rate)
 
             #if the patch is out, change status to idle and patch status to burnt
-            if patch.burn_time == 0
+            if patch.burn_time == 0 || patch.edge == false
                 uav.vel = (0, 0)
                 uav.status = :idle
                 patch.status = :burnt
+                patch.edge = :false
             end
 
             #if out of suppressant (regardless of state), change status to returning
@@ -194,12 +215,20 @@ function agent_step!(coord::Coord, model)
 
         prioritized_patches = patch_prioritization(model)
 
+        if check_out_of_control(model) == false && coord.fire_out == true
+            coord.fire_out = false
+        end
 
         if length(prioritized_patches) == 0
             #fires are put out! simulation can end
             #note that I can't figure out how to get the simulation to end on its own
-            print("Fires are out! Done in ", coord.internal_step_counter - 1, " steps. \n")
+            #print("Fires are out! Done in ", coord.internal_step_counter - 1, " steps. \n")
+            if  coord.steps_out == 0
+                coord.steps_out = coord.internal_step_counter - 1
+            end
         end
+
+
 
         free_uavs = [u for u in allagents(model) if u isa UAV]
         free_uavs = [u for u in free_uavs if u.status == :idle]
@@ -234,16 +263,34 @@ end
 # Support functions for the agent steps
 
 function patch_prioritization(model)
+    #=
 
-
+    =#
         patches = [p for p in allagents(model) if p isa Patch]
-        patches_burning = [p for p in patches if p.status == :burning]
+        patches_burning_on_edge = [p for p in patches if p.edge == true]
         patches_burnt = [p for p in patches if p.status == :burnt]
+        patches = [patches_burning_on_edge; patches_burnt]
         centroid = (mean([p.pos[1] for p in patches]), mean([p.pos[2] for p in patches]))
-
-        weights = [1, 1.5]
-
-        prioritized_patches = sort(patches_burning, by=p -> weights[1] * p.dist + weights[2] * sqrt( (p.pos[1] - centroid[1])^2 + (p.pos[2] - centroid[2])^2))
+        weights = [2, 4] #weighting for distance and time to burn
+        prioritized_patches = sort(patches_burning_on_edge, by=p -> weights[1] * p.dist + weights[2] * sqrt( (p.pos[1] - centroid[1])^2 + (p.pos[2] - centroid[2])^2))
 
     return prioritized_patches
 end
+
+function check_out_of_control(model)
+    #checks the edge patches to explore if the fire got "out of hand" and reached the edge of the map
+    patches = [p for p in allagents(model) if p isa Patch]
+
+    for p in patches
+        if p.pos[1] <= 0.05*model.dims[1] || p.pos[1] >= 0.95*model.dims[1] || p.pos[2] <= 0.05*model.dims[2] || p.pos[2] >= 0.95*model.dims[2]
+            if p.status == :burnt
+                return false
+                break
+            else 
+                return true
+            end
+        end
+    end
+end
+
+

@@ -9,21 +9,21 @@ include("Model_Agents.jl")
 
 function forest_fire(; 
     n_uav = 25, #number of uav
-    uav_speed = 10, # m/min (m/step)       
+    uav_speed = 200, # m/min (m/step)       
     n_x_cells = 50, #number of cells in x direction
-    radius_burn = 10.0, # distnace between cells
-    burn_time = 100, # mean min (steps) for burning
-    prob_burn = 0.01, # mean prob it will catch fire next to a burning tree
-    first_burn = :center, #scen
-    fire_delay = 10, #adding delay into simulation before coordinator "notices" fire
-    tree_UQ = (20, 0.005), #uncertainty in tree parameters
+    radius_burn = 10.0, # distance between cells
+    burn_time = 60, # mean min (steps) for burning
+    prob_burn = 0.016*2.5, # mean prob it will catch fire next to a burning tree
+    first_burn = :center, #scenario
+    fire_delay = 60, #adding delay into simulation before coordinator "notices" fire
+    tree_UQ = (15, 0.007), #uncertainty in tree parameters
     seed = 2, #random seed for repeatable results
     tune_model = false, #keyword to just look at model for tuning purposes
-    battery_max = 200, #des
+    battery_max = 120, #des
     battery_recharge = 20,
     suppressant_max = 300, 
-    suppressant_rate = 10,
-    suppressant_recharge = 20,
+    suppressant_rate = 30, #essentiall how many minutes it reduces the burn time by
+    suppressant_recharge = 120,
     )
 
     #initialize based on dimensions and
@@ -35,7 +35,7 @@ function forest_fire(;
     order = Dict("green" => 1, "burning" => 2, "burnt" => 3, "coord" => 4, "uav" => 5)
     model_params = Dict(:battery_max => battery_max, :battery_recharge => battery_recharge, :n_uav => n_uav,
      :suppressant_max => suppressant_max, :suppressant_recharge => suppressant_recharge,
-     :suppressant_rate => suppressant_rate, :base_location => base_location)
+     :suppressant_rate => suppressant_rate, :base_location => base_location, :dims => dims)
     if tune_model
         forest = ABM(Patch, space; rng, scheduler = Schedulers.ByProperty(:sched), container = Vector)
     else
@@ -109,12 +109,12 @@ function forest_fire(;
         dist = sqrt((pos[1] - base_location[1])^2 + (pos[2] - base_location[2])^2)
         
         if x_min <= pos[1] <= x_max && y_min <= pos[2] <= y_max
-            add_agent!(pos, Patch, forest, (0,0), order["burning"], burn_time, prob_burn, radius_burn, :burning, dist)
+            add_agent!(pos, Patch, forest, (0,0), order["burning"], burn_time, prob_burn, radius_burn, :burning, dist, true)
         else
             add_agent!(pos, Patch, forest, (0,0), order["green"], 
             burn_time + rand(forest.rng,(-tree_UQ[1]:1:tree_UQ[1])),
             prob_burn + rand(forest.rng,(-tree_UQ[2]:0.001:tree_UQ[2])),
-            radius_burn, :green, dist)   
+            radius_burn, :green, dist, false)   
         end
     end
     
@@ -126,7 +126,7 @@ function forest_fire(;
              UAV, forest, (0,0), order["uav"], battery_max, suppressant_max,uav_speed,:idle, (0,0), 0)
         end
 
-        add_agent!(base_location, Coord, forest, (0,0), order["coord"],fire_delay,0) 
+        add_agent!(base_location, Coord, forest, (0,0), order["coord"],fire_delay,0,true,0) 
        
     end
 
